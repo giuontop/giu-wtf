@@ -12,10 +12,10 @@ local NORMAL_SPEED = 16
 local FAST_SPEED = 130
 local KEY_SPEED = Enum.KeyCode.C
 local KEY_CIBLE = Enum.KeyCode.Q
-local HITBOX_SIZE = Vector3.new(30, 30, 30)
+local HITBOX_SIZE = Vector3.new(2, 2, 1)
 
 local speedOn = false
-local rainbowHL, target, lineBeam, guiRoot
+local rainbowHL, target, lineBeam, guiRoot, targetHL
 
 local function notify(title, text, uid)
     local thumb
@@ -31,24 +31,29 @@ local function notify(title, text, uid)
 end
 
 -- Rainbow Highlight
-local function addRainbow()
-    if rainbowHL then rainbowHL:Destroy() end
+local function addRainbowHighlight(char)
     local hl = Instance.new("Highlight")
     hl.Name = "RainbowHL"
     hl.FillTransparency = 1
     hl.OutlineTransparency = 0
     hl.OutlineColor = Color3.new(1, 0, 0)
-    hl.Adornee = player.Character
-    hl.Parent = player.Character
-    rainbowHL = hl
+    hl.Adornee = char
+    hl.Parent = char
 
     local hue = 0
     RunService.RenderStepped:Connect(function()
-        if rainbowHL and speedOn then
+        if hl and hl.Parent then
             hue = (hue + 0.01) % 1
-            rainbowHL.OutlineColor = Color3.fromHSV(hue, 1, 1)
+            hl.OutlineColor = Color3.fromHSV(hue, 1, 1)
         end
     end)
+
+    return hl
+end
+
+local function addRainbow()
+    if rainbowHL then rainbowHL:Destroy() end
+    rainbowHL = addRainbowHighlight(player.Character)
 end
 
 -- Toggle Speed
@@ -60,56 +65,58 @@ local function toggleSpeed()
     end
 end
 
--- ESP Basique (affiche noms plus petits)
-local function createESPForCharacter(char, plr)
-    local head = char:WaitForChild("Head", 5)
-    if not head then return end
-    if head:FindFirstChild("NameESP") then return end
-
-    local esp = Instance.new("BillboardGui")
-    esp.Name = "NameESP"
-    esp.AlwaysOnTop = true
-    esp.Size = UDim2.new(0, 100, 0, 10)
-    esp.StudsOffset = Vector3.new(0, 2, 0)
-    esp.Adornee = head
-    esp.Parent = head
-
-    local text = Instance.new("TextLabel")
-    text.BackgroundTransparency = 1
-    text.Size = UDim2.new(1, 0, 1, 0)
-    text.Text = plr.DisplayName
-    text.TextColor3 = Color3.new(1, 1, 1)
-    text.TextStrokeTransparency = 0
-    text.TextStrokeColor3 = Color3.new(0, 0, 0)
-    text.Font = Enum.Font.GothamBold
-    text.TextScaled = true
-    text.TextSize = 6
-    text.Parent = esp
-end
-
+-- ESP fiable
 local function setupESP()
-    for _, plr in ipairs(Players:GetPlayers()) do
+    local function createESP(char, plr)
+        local head = char:FindFirstChild("Head")
+        if not head then return end
+        if head:FindFirstChild("NameESP") then
+            head:FindFirstChild("NameESP"):Destroy()
+        end
+
+        local esp = Instance.new("BillboardGui")
+        esp.Name = "NameESP"
+        esp.AlwaysOnTop = true
+        esp.Size = UDim2.new(0, 100, 0, 20)
+        esp.StudsOffset = Vector3.new(0, 2, 0)
+        esp.Adornee = head
+        esp.Parent = head
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = plr.DisplayName
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.new(0, 0, 0)
+        label.Font = Enum.Font.GothamBold
+        label.TextScaled = true
+        label.Parent = esp
+    end
+
+    local function handleCharacter(plr)
         if plr ~= player then
             if plr.Character then
-                createESPForCharacter(plr.Character, plr)
+                createESP(plr.Character, plr)
             end
             plr.CharacterAdded:Connect(function(char)
-                createESPForCharacter(char, plr)
+                char:WaitForChild("Head", 5)
+                createESP(char, plr)
             end)
         end
     end
-    Players.PlayerAdded:Connect(function(plr)
-        if plr ~= player then
-            plr.CharacterAdded:Connect(function(char)
-                createESPForCharacter(char, plr)
-            end)
-        end
-    end)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        handleCharacter(plr)
+    end
+
+    Players.PlayerAdded:Connect(handleCharacter)
 end
 
 -- Ciblage
 local function clearTarget()
     if lineBeam then lineBeam:Destroy(); lineBeam = nil end
+    if targetHL then targetHL:Destroy(); targetHL = nil end
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = target.Character.HumanoidRootPart
         hrp.Size = Vector3.new(2, 2, 1)
@@ -176,14 +183,7 @@ local function lockTarget(fromButton)
     beam.Attachment1 = a1
     beam.Width0 = 0.1
     beam.Width1 = 0.1
-    beam.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
-        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 165, 0)),
-        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 255, 0)),
-        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 0)),
-        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0, 255, 255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 255))
-    })
+    beam.Color = ColorSequence.new(Color3.fromHSV(0, 1, 1))
     beam.FaceCamera = true
     beam.Parent = player.Character
     lineBeam = beam
@@ -193,6 +193,8 @@ local function lockTarget(fromButton)
     hrp.Transparency = 1
     hrp.CanCollide = false
     hrp.Material = Enum.Material.Neon
+
+    targetHL = addRainbowHighlight(target.Character)
 end
 
 -- GUI
@@ -219,13 +221,12 @@ local function createGUI()
 
     mkBtn("🚀", 20, toggleSpeed)
     mkBtn("🎯", 90, function() lockTarget(true) end)
-    mkBtn("📍", 160, function()
-        local giu = Players:FindFirstChild("Giuliqn")
-        if giu and giu.Character and giu.Character:FindFirstChild("HumanoidRootPart") then
-            local root = giu.Character.HumanoidRootPart
+    mkBtn("🌀", 160, function()
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local root = target.Character.HumanoidRootPart
             player.Character:PivotTo(CFrame.new(root.Position + Vector3.new(0, 5, 0)))
         else
-            notify("Tp Giu", "Giuliqn introuvable", player.UserId)
+            notify("Tp Cible", "Aucune cible active", player.UserId)
         end
     end)
 end
