@@ -15,7 +15,7 @@ local KEY_CIBLE = Enum.KeyCode.Q
 local HITBOX_SIZE = Vector3.new(30, 30, 30)
 
 local speedOn = false
-local rainbowHL, target, lineBeam, guiRoot, espFolder
+local rainbowHL, target, lineBeam, guiRoot
 
 local function notify(title, text, uid)
     local thumb
@@ -60,51 +60,50 @@ local function toggleSpeed()
     end
 end
 
--- ESP
+-- ESP Basique (affiche noms plus petits)
+local function createESPForCharacter(char, plr)
+    local head = char:WaitForChild("Head", 5)
+    if not head then return end
+    if head:FindFirstChild("NameESP") then return end
+
+    local esp = Instance.new("BillboardGui")
+    esp.Name = "NameESP"
+    esp.AlwaysOnTop = true
+    esp.Size = UDim2.new(0, 100, 0, 10)
+    esp.StudsOffset = Vector3.new(0, 2, 0)
+    esp.Adornee = head
+    esp.Parent = head
+
+    local text = Instance.new("TextLabel")
+    text.BackgroundTransparency = 1
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.Text = plr.DisplayName
+    text.TextColor3 = Color3.new(1, 1, 1)
+    text.TextStrokeTransparency = 0
+    text.TextStrokeColor3 = Color3.new(0, 0, 0)
+    text.Font = Enum.Font.GothamBold
+    text.TextScaled = true
+    text.TextSize = 6
+    text.Parent = esp
+end
+
 local function setupESP()
-    if espFolder then espFolder:Destroy() end
-    espFolder = Instance.new("Folder")
-    espFolder.Name = "ESPFolder"
-    espFolder.Parent = (gethui and gethui()) or game:GetService("CoreGui")
-
-    local function createESP(plr)
-        coroutine.wrap(function()
-            repeat task.wait() until plr.Character and plr.Character:FindFirstChild("Head")
-            local head = plr.Character.Head
-            local bb = Instance.new("BillboardGui")
-            bb.Name = "ESP"
-            bb.Adornee = head
-            bb.Size = UDim2.new(0, 200, 0, 40)
-            bb.StudsOffset = Vector3.new(0, 2.5, 0)
-            bb.AlwaysOnTop = true
-            bb.Parent = espFolder
-
-            local txt = Instance.new("TextLabel", bb)
-            txt.Size = UDim2.new(1, 0, 1, 0)
-            txt.BackgroundTransparency = 1
-            txt.Font = Enum.Font.GothamBold
-            txt.TextSize = 16
-            txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-            txt.TextStrokeTransparency = 0
-            txt.Text = plr.DisplayName
-        end)()
-    end
-
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
-            createESP(plr)
-            plr.CharacterAdded:Connect(function()
-                task.wait(1)
-                createESP(plr)
+            if plr.Character then
+                createESPForCharacter(plr.Character, plr)
+            end
+            plr.CharacterAdded:Connect(function(char)
+                createESPForCharacter(char, plr)
             end)
         end
     end
-
     Players.PlayerAdded:Connect(function(plr)
-        plr.CharacterAdded:Connect(function()
-            task.wait(1)
-            createESP(plr)
-        end)
+        if plr ~= player then
+            plr.CharacterAdded:Connect(function(char)
+                createESPForCharacter(char, plr)
+            end)
+        end
     end)
 end
 
@@ -177,7 +176,14 @@ local function lockTarget(fromButton)
     beam.Attachment1 = a1
     beam.Width0 = 0.1
     beam.Width1 = 0.1
-    beam.Color = ColorSequence.new(Color3.new(1, 0, 0))
+    beam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 165, 0)),
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0, 255, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 255))
+    })
     beam.FaceCamera = true
     beam.Parent = player.Character
     lineBeam = beam
@@ -212,24 +218,31 @@ local function createGUI()
     end
 
     mkBtn("🚀", 20, toggleSpeed)
-    mkBtn("🎯", 90, function() lockTarget(true) end) -- mobile ciblage centre écran
+    mkBtn("🎯", 90, function() lockTarget(true) end)
+    mkBtn("📍", 160, function()
+        local giu = Players:FindFirstChild("Giuliqn")
+        if giu and giu.Character and giu.Character:FindFirstChild("HumanoidRootPart") then
+            local root = giu.Character.HumanoidRootPart
+            player.Character:PivotTo(CFrame.new(root.Position + Vector3.new(0, 5, 0)))
+        else
+            notify("Tp Giu", "Giuliqn introuvable", player.UserId)
+        end
+    end)
 end
 
 -- Bind PC
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == KEY_SPEED then toggleSpeed() end
-    if input.KeyCode == KEY_CIBLE then lockTarget(false) end -- PC ciblage curseur
+    if input.KeyCode == KEY_CIBLE then lockTarget(false) end
 end)
 
--- Boucle
 RunService.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         player.Character.Humanoid.WalkSpeed = speedOn and FAST_SPEED or NORMAL_SPEED
     end
 end)
 
--- Démarrage
 createGUI()
 setupESP()
 notify("Script prêt", "C = Speed | Q = Cible | 🎯 Mobile", player.UserId)
